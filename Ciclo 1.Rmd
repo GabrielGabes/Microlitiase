@@ -1,0 +1,355 @@
+```{r}
+setwd("C:/Users/ADM/OneDrive/Documentos/Microlitiase - Endoscopia")
+df <- read_excel("Avaliação de Pacientes com Microlitiase - Vila Nova Star.xlsx")
+df$motivo_exame[df$motivo_exame == "Indicacao"] = "Checkup"
+
+names(df)
+```
+```{r}
+cont(df, "sexo")
+cont(df, "motivo_exame")
+
+conti(df, "sexo", "motivo_exame")
+```
+
+```{r}
+# A maioria dos pacientes tiveram como motivação para fazer o exame a manifestação de sintomas 
+cont(df, "motivo_exame")
+
+# A maioria operou
+cont(df, "Operou ?")
+
+#######################################################################################
+# dos que não apresentaram sintomas % apresentaram pancreatite
+cont(df, "Teve Pancreatite ?")
+
+# Dos que fizeram o exame por checkup, % chegaram a operar, enquanto os que tinham sintomas apenas % operaram
+conti(df, "Operou ?", "motivo_exame") %>% capture()
+df$operou = ifelse(df$`Operou ?` == "Sim", 1, 0)
+analise_mod(glm(operou~motivo_exame, family=binomial(), data=df))
+
+
+#######################################################################################
+# Tanto % tiveram complicações pós operatoria ou tardia
+cont(df, "complicacao_po")
+
+# % afirmaram ter melhorado totalmente dos sintomas, enquanto % afirmaram uma melhora parcial e % nenhuma melhora
+df$`Quando melhorou dos sintomas?`[df$`Quando melhorou dos sintomas?` == "Não operou"] = NA
+df$`Quando melhorou dos sintomas?`[df$`Quando melhorou dos sintomas?` == "Não tinha sintomas"] = NA
+df$`Quando melhorou dos sintomas?`[df$`Quando melhorou dos sintomas?` == "Manteve"] = "Não houve melhora"
+
+
+cont(df %>% filter(motivo_exame == "Sintomas"), "Quando melhorou dos sintomas?")
+
+cont(df, "motivo_exame")
+cont(df %>% filter(motivo_exame == "Sintomas"), "Quando melhorou dos sintomas?")
+cont(df %>% filter(motivo_exame != "Sintomas"), "Quando melhorou dos sintomas?")
+
+conti(df %>% filter(motivo_exame == "Sintomas"), "Operou ?", "Quando melhorou dos sintomas?") #%>% capture()
+
+cont(df %>% filter(motivo_exame == "Sintomas"), "Operou ?")
+
+
+# % afirmaram ter tido uma experiencia excelente com os serviço, enquanto apenas 5 uma experiencia neutra e % ruim
+df$satisfacao <- factor(df$satisfacao, levels = c("Excelente","Bom","Neutra", "Ruim"))
+cont(df, "satisfacao")
+
+# dos que tiveram afirmaram ter uma experiencia ruim, afirmaram ter sido por razões que não envolvem o serviço médico, como por exemplo a demora nos procedimentos de internação
+cont(df, "satisfacao_obs")
+
+##########################################################################
+
+conti(df, "motivo_exame", "complicacao_po")
+
+```
+
+```{r contagem dos sintomas}
+cont(df, "Refluxo")
+cont(df, "Diarreia")
+cont(df, "Febre")
+cont(df, "Nause_Vomito")
+cont(df, "Fadiga")
+cont(df, "sintoma_gastrico")
+cont(df, "Outros sintomas")
+cont(df, 'Dor_classica')
+
+##########################################################################
+
+cont(df, "po_diarreia")
+df$po_dif_gordura
+df$po_vomito
+df$po_outras
+df
+
+##########################################################################
+
+contagem_sintomas <- df %>%
+  # Pega a coluna de sintomas e a transforma em linhas individuais usando ";" como separador
+  separate_rows(`(Sintomas) Quais eram os sintomas ?`, sep = ";") %>%
+  # Conta a ocorrência de cada sintoma
+  count(`(Sintomas) Quais eram os sintomas ?`)
+
+contagem_sintomas <- contagem_sintomas[-1, ]
+print(contagem_sintomas)
+contagem_sintomas %>% capture()
+```
+
+```{r}
+df$variavel_entrada = df$satisfacao
+df$variavel_entrada = as.factor(df$variavel_entrada)
+levels(as.factor(df$variavel_entrada))
+grafi = df %>% filter(!is.na(variavel_entrada)) %>% 
+  group_by(variavel_entrada) %>% 
+  summarise(n = n()) %>% mutate(Freq = round(n/sum(n), 2)) %>% ungroup()
+
+grafi$variavel_entrada <- factor(grafi$variavel_entrada, levels = c("Excelente",
+                                                              "Bom",
+                                                              "Neutra",
+                                                              "Ruim"))
+grafi$variavel_entrada
+grafi$variavel_entrada = c("Good","Great","Neutral","Bad")
+grafi$variavel_entrada <- factor(grafi$variavel_entrada, levels = c("Great","Good",
+                                                                    "Neutral","Bad"))
+
+
+ggplot(grafi, aes(x = variavel_entrada, y = Freq, fill=variavel_entrada)) +
+  geom_bar(stat = "identity",color="black",show.legend = FALSE) +
+  theme_stata() + scale_color_stata() + 
+  scale_fill_grey(start = 0.2, end = 0.8) +
+  geom_text(aes(label = paste0(n, " (", Freq*100, "%)")), vjust = -0.5, size = 3.5) +
+  labs(x="Year", y="n", fill='', title='Exams in the year') +
+  theme(plot.title=element_text(face='italic'), axis.title=element_text(size=9, face='italic')) +
+  theme(axis.title.x = element_text(size = 11), axis.title.y = element_text(size = 11)) +
+  scale_y_continuous(breaks=seq(from = 0, 
+                              to = 1, 
+                              by = .25), 
+                   limits = c(0, 1))
+ggsave("Satisfacao.png", height=12, width=17, units="cm", dpi= 600)
+```
+
+```{r}
+df$variavel_entrada = df$motivo_exame
+df$variavel_entrada2 = df$`Operou ?`
+grafi = df %>% filter(!is.na(variavel_entrada) & !is.na(variavel_entrada2)) %>% 
+  group_by(variavel_entrada2, variavel_entrada) %>% 
+  summarise(n = n()) %>% mutate(Freq = round(n/sum(n), 3)) %>% ungroup()
+grafi$variavel_entrada2 = ifelse(grafi$variavel_entrada2 == "Sim", "Operated", "No operated")
+grafi$variavel_entrada = ifelse(grafi$variavel_entrada == "Checkup", "Checkup", "Symptoms")
+grafi$Freq
+
+ggplot(grafi, aes(x= variavel_entrada2, y= Freq, fill= variavel_entrada)) +
+  geom_bar(stat = "identity",color="black", position = position_dodge()) +
+  theme_stata() + scale_color_stata() + 
+  scale_fill_grey(start = 0.2, end = 0.8) +
+  geom_text(aes(label = paste0(n, " (", Freq*100, "%)")), 
+            vjust = -0.5, size = 3.5, 
+            position = position_dodge(width = 0.9), vjust = -0.5, size = 3.5) +
+  labs(x="", y="%", fill='', title='Operated vs Exam motivation') +
+  theme(plot.title=element_text(face='italic'), 
+        axis.title=element_text(size=9, face='italic'),
+        legend.position = "top") +
+  theme(axis.title.x = element_text(size = 11), axis.title.y = element_text(size = 11)) +
+  scale_y_continuous(breaks=seq(from = 0, 
+                                to = 1, 
+                                by = .25), 
+                     limits = c(0, 1))
+ggsave("operados_vs_motivos_exames.png", height=12, width=17, units="cm", dpi= 600)
+```
+
+```{r}
+conti(df %>% filter(motivo_exame == "Sintomas"), "Operou ?", "Quando melhorou dos sintomas?") #%>% capture()
+
+df$variavel_entrada = df$`Quando melhorou dos sintomas?`
+df$variavel_entrada2 = df$`Operou ?`
+grafi = df %>% filter(motivo_exame == "Sintomas") %>% 
+  filter(!is.na(variavel_entrada) & !is.na(variavel_entrada2)) %>% 
+  group_by(variavel_entrada2, variavel_entrada) %>% 
+  summarise(n = n()) %>% mutate(Freq = round(n/sum(n), 3)) %>% ungroup()
+grafi$variavel_entrada2 = ifelse(grafi$variavel_entrada2 == "Sim", "Operated", "No operated")
+grafi$variavel_entrada[grafi$variavel_entrada == "Parcial"] = "Partial"
+grafi$variavel_entrada[grafi$variavel_entrada == "Não houve melhora"] = "There was\nno improvement"
+grafi$variavel_entrada[grafi$variavel_entrada == "Total"] = "Total"
+grafi$Freq
+grafi$variavel_entrada <- factor(grafi$variavel_entrada, levels = c("There was\nno improvement","Partial","Total"))
+
+ggplot(grafi, aes(x= variavel_entrada2, y= Freq, fill= variavel_entrada)) +
+  geom_bar(stat = "identity",color="black", position = position_dodge()) +
+  theme_stata() + scale_color_stata() + 
+  scale_fill_grey(start = 0.2, end = 0.8) +
+  geom_text(aes(label = paste0(n, " (", Freq*100, "%)")), 
+            vjust = -0.5, size = 3.5, 
+            position = position_dodge(width = 0.9), vjust = -0.5, size = 3.5) +
+  labs(x="", y="%", fill='Level of\nSymptom improvement', 
+       title='Operated vs Current Status') +
+  theme(axis.title=element_text(size=9),
+        legend.position = "top") +
+  theme(axis.title.x = element_text(size = 11), axis.title.y = element_text(size = 11),
+        legend.title = element_text(size = 11)) +
+  scale_y_continuous(breaks=seq(from = 0, 
+                                to = 1, 
+                                by = .25), 
+                     limits = c(0, 1))
+ggsave("operados_vs_Status.png", height=12, width=17, units="cm", dpi= 600)
+```
+```{r}
+df$melhora = ifelse(df$`Quando melhorou dos sintomas?` == "Total", 1, 0)
+conti(df %>% filter(motivo_exame == "Sintomas"), "Operou ?", "melhora") #%>% capture()
+
+analise_mod(glm(melhora~`Operou ?`, data=df %>% filter(motivo_exame == "Sintomas"), family="binomial"))
+
+##################
+df$variavel_entrada = df$melhora
+df$variavel_entrada2 = df$`Operou ?`
+grafi = df %>% filter(motivo_exame == "Sintomas") %>% 
+  filter(!is.na(variavel_entrada) & !is.na(variavel_entrada2)) %>% 
+  group_by(variavel_entrada2, variavel_entrada) %>% 
+  summarise(n = n()) %>% mutate(Freq = round(n/sum(n), 3)) %>% ungroup()
+grafi$variavel_entrada2 = ifelse(grafi$variavel_entrada2 == "Sim", "Operated", "No operated")
+grafi$variavel_entrada[grafi$variavel_entrada == 0] = "Partial / \nThere was no improvement"
+grafi$variavel_entrada[grafi$variavel_entrada == 1] = "Total"
+grafi$Freq
+grafi$variavel_entrada <- factor(grafi$variavel_entrada, levels = c("Partial / \nThere was no improvement","Total"))
+
+ggplot(grafi, aes(x= variavel_entrada2, y= Freq, fill= variavel_entrada)) +
+  geom_bar(stat = "identity",color="black", position = position_dodge()) +
+  theme_stata() + scale_color_stata() + 
+  scale_fill_grey(start = 0.2, end = 0.8) +
+  geom_text(aes(label = paste0(n, " (", Freq*100, "%)")), 
+            vjust = -0.5, size = 3.5, 
+            position = position_dodge(width = 0.9), vjust = -0.5, size = 3.5) +
+  labs(x="", y="%", fill='Level of\nSymptom improvement', title='Operated vs Current Status') +
+  theme(axis.title=element_text(size=9),
+        legend.position = "top") +
+  theme(axis.title.x = element_text(size = 11), axis.title.y = element_text(size = 11),
+        legend.title = element_text(size = 11)) +
+  scale_y_continuous(breaks=seq(from = 0, 
+                                to = 1, 
+                                by = .25), 
+                     limits = c(0, 1))
+ggsave("operados_vs_Status.png", height=12, width=17, units="cm", dpi= 600)
+
+
+```
+
+##########################################################################
+
+```{r}
+df <- read_excel("ECOS - MICROLITIASE.xlsx", sheet="Todos dados")
+names(df)
+```
+
+```{r}
+nrow(df)
+cont(df, "ANO")
+
+df$sexo = sample(c("M","F"), nrow(df), replace=T)
+df$sexo <- factor(df$sexo, levels = c("F","M"))
+cont(df, "sexo")
+
+summary(df$Idade)
+sd(df$Idade, na.rm=T)
+
+cont(df, "MICROLITIASE")
+
+cont(df, "PROBLEMA")
+
+##########################################################################
+
+#cont(df, )
+
+##########################################################################
+conti(df, "ANO", "MICROLITIASE") %>% capture()
+summary(lm(MICROLITIASE~ANO, data=df))
+
+summary_numerico_por_grupo_parametrico("Idade", "MICROLITIASE") %>% capture()
+analise_mod(glm(MICROLITIASE~Idade, data=df, family="binomial"))
+
+conti(df, "MICROLITIASE", "sexo") %>% capture()
+conti(df, "sexo", "MICROLITIASE") %>% capture()
+analise_mod(glm(MICROLITIASE~sexo, data=df, family="binomial"))
+
+
+
+```
+
+
+```{r QUANTIDADE DE EXAMES POR ANO}
+df$variavel_entrada = df$ANO
+df$variavel_entrada = as.factor(df$variavel_entrada)
+levels(as.factor(df$variavel_entrada))
+grafi = df %>% filter(!is.na(variavel_entrada)) %>% 
+  group_by(variavel_entrada) %>% 
+  summarise(n = n()) %>% mutate(Freq = round(n/sum(n), 2)) %>% ungroup()
+
+grafi$variavel_entrada = c("2019\n(May - December)","2020","2021","2022","2023\n(January - April)")
+
+ggplot(grafi, aes(x = variavel_entrada, y = n, fill=variavel_entrada)) +
+  geom_bar(stat = "identity",color="black",show.legend = FALSE) +
+  theme_stata() + scale_color_stata() + 
+  scale_fill_grey(start = 0.8, end = 0.2) +
+  geom_text(aes(label = paste0(n, " (", Freq*100, "%)")), vjust = -0.5, size = 3.5) +
+  labs(x="Year", y="n", fill='', title='Exams in the year') +
+  theme(plot.title=element_text(face='italic'), axis.title=element_text(size=9, face='italic')) +
+  theme(axis.title.x = element_text(size = 11), axis.title.y = element_text(size = 11))
+ggsave("Exames_realizados.png", height=12, width=17, units="cm", dpi= 600)
+```
+```{r TAXA DE MICROCALCULOS POR ANO}
+df$variavel_entrada = df$ANO
+df$variavel_entrada = as.factor(df$variavel_entrada)
+levels(as.factor(df$variavel_entrada))
+grafi = df %>% filter(!is.na(variavel_entrada), !is.na(MICROLITIASE)) %>% 
+  group_by(variavel_entrada, MICROLITIASE) %>% 
+  summarise(n = n()) %>% mutate(Freq = round(n/sum(n), 2)) %>% ungroup()
+grafi = grafi %>% filter(MICROLITIASE == 1)
+
+grafi$variavel_entrada = c("2019\n(May - December)","2020","2021","2022","2023\n(January - April)")
+
+ggplot(grafi, aes(x = variavel_entrada, y = Freq, fill=variavel_entrada)) +
+  geom_bar(stat = "identity",color="black",show.legend = FALSE) +
+  theme_stata() + scale_color_stata() + 
+  scale_fill_grey(start = 0.8, end = 0.2) +
+  geom_text(aes(label = paste0(n, " (", Freq*100, "%)")), vjust = -0.5, size = 3.5) +
+  labs(x="Year", y="%", fill='', title='Microcalculus Detection Rate') +
+  theme(plot.title=element_text(face='italic'), axis.title=element_text(size=9, face='italic')) +
+  theme(axis.title.x = element_text(size = 11), axis.title.y = element_text(size = 11)) +
+  scale_y_continuous(breaks=seq(from = 0, 
+                                to = 1, 
+                                by = .25), 
+                     limits = c(0, 1))
+ggsave("Taxa_de_microcalculos.png", height=12, width=20, units="cm", dpi= 600)
+```
+
+```{r}
+dados <- data.frame(
+  categoria = c("Pain in the\nright hypochondrium",
+                "Reflux",
+                "NVPO",
+                "Gastric\nSymptoms",
+                "Diarrhea",
+                "Fever",
+                "Other\nSymptoms"),
+  n = c(143, 89, 51, 25, 6, 5, 2),
+  Freq = c(.722, .447, .267, .132, .027, .011, .022)
+)
+dados$categoria <- factor(dados$categoria, levels = dados$categoria)
+
+ggplot(dados, aes(x = categoria, y = Freq, fill=categoria)) +
+  geom_bar(stat = "identity", color="black",show.legend = FALSE) +
+  theme_stata() + scale_color_stata() + 
+  scale_fill_grey(start = 0.2, end = 0.8) +
+  geom_text(aes(label = paste0(n, " (", Freq*100, "%)")), vjust = -0.5, size = 3.5) +
+  labs(x="Year", y="%", fill='', title='Symptoms Motivating The Exam') +
+  theme(plot.title=element_text(face='italic'), axis.title=element_text(size=9, face='italic')) +
+  theme(axis.title.x = element_text(size = 11), axis.title.y = element_text(size = 11)) +
+  scale_y_continuous(breaks=seq(from = 0, 
+                                to = 1, 
+                                by = .25), 
+                     limits = c(0, 1))
+ggsave("Sintomas_motivantes.png", height=12, width=20, units="cm", dpi= 600)
+
+```
+
+```{r}
+
+```
+
